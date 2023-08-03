@@ -39,6 +39,50 @@ upstream:
         secretKeyRef:
           key: postgres-password
           name: "{{ .Release.Name }}-postgresql"
+    - name: 'APP_CONFIG_app_baseUrl'
+      value: 'https://{{ .Values.ingress.host }}'
+    - name: 'APP_CONFIG_backend_baseUrl'
+      value: 'https://{{ .Values.ingress.host }}'
+    - name: 'APP_CONFIG_backend_cors_origin'
+      value: 'https://{{ .Values.ingress.host }}'
+    - name: 'APP_CONFIG_backend_cors_origin'
+      value: 'https://{{ .Values.ingress.host }}'
+    - name: 'APP_CONFIG_catalog_providers_keycloakOrg_default_baseUrl'
+      value: '{{ required "Keycloak BaseUrl is Required" .Values.keycloak.baseUrl }}'
+    - name: 'APP_CONFIG_catalog_providers_keycloakOrg_default_loginRealm'
+      value: '{{ required "Keycloak Realm is Required" .Values.keycloak.realm }}'
+    - name: 'APP_CONFIG_catalog_providers_keycloakOrg_default_realm'
+      value: '{{ required "Keycloak Realm is Required" .Values.keycloak.realm }}'
+    - name: 'APP_CONFIG_catalog_providers_keycloakOrg_default_clientId'
+      value: '{{ required "Keycloak Client Secret is Required" .Values.keycloak.clientId }}'
+    - name: 'APP_CONFIG_catalog_providers_keycloakOrg_default_clientSecret'
+      value: '{{ required "Keycloak Client Secret is Required" .Values.keycloak.clientSecret }}'
+
+  extraContainers:
+    - name: oauth2-proxy
+      env:
+        - name: OAUTH2_PROXY_CLIENT_ID
+          value: '{{ required "Keycloak Client Secret is Required" .Values.keycloak.clientId }}'
+        - name: OAUTH2_PROXY_CLIENT_SECRET
+          value: '{{ required "Keycloak Client Secret is Required" .Values.keycloak.clientSecret }}'
+        - name: OAUTH2_PROXY_COOKIE_SECRET
+          value: '{{ default (randAlpha 32 | lower | b64enc) .Values.keycloak.cookieSecret }}'
+        - name: OAUTH2_PROXY_OIDC_ISSUER_URL
+          value: '{{ required "Keycloak Issuer URL is Required" .Values.keycloak.baseUrl }}/realms/{{ required "Keycloak Realm is Required" .Values.keycloak.realm }}'
+        - name: OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY
+          value: 'true'
+      ports:
+        - name: oauth-proxy
+          containerPort: 4180
+          protocol: TCP
+      imagePullPolicy: IfNotPresent
+      image: 'quay.io/oauth2-proxy/oauth2-proxy:latest'
+      args:
+        - '--provider=oidc'
+        - '--email-domain=*'
+        - '--upstream=http://localhost:7007'
+        - '--http-address=0.0.0.0:4180'
+        - '--skip-provider-button'
 
   postgresql:
     enabled: true
@@ -70,7 +114,19 @@ upstream:
             name: "{{ .Release.Name }}-postgresql"
   ingress:
     host: "{{ .Values.global.host }}"
+    enabled: true
 
+service:
+  ports:
+    backend: 4180
+    targetPort: oauth-proxy
+
+keycloak:
+  baseUrl: '<KEYCLOAK_URL>'
+  realm: 'backstage'
+  clientId: 'backstage'
+  clientSecret: ''
+  cookieSecret: ''
 
 # -- OpenShift Route parameters
 route:
